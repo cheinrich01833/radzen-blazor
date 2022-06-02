@@ -88,6 +88,13 @@ namespace Radzen.Blazor
         public bool Multiple { get; set; }
 
         /// <summary>
+        /// Gets or sets the icon.
+        /// </summary>
+        /// <value>The icon.</value>
+        [Parameter]
+        public string Icon { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether this <see cref="RadzenUpload"/> is disabled.
         /// </summary>
         /// <value><c>true</c> if disabled; otherwise, <c>false</c>.</value>
@@ -231,10 +238,39 @@ namespace Radzen.Blazor
         }
 
         /// <summary>
+        /// Clear selected file(s) from the upload selection
+        /// </summary>
+        public async System.Threading.Tasks.Task ClearFiles()
+        {
+            while(files.Count > 0)
+            {
+                await OnRemove(files[0], false);
+            }
+
+            await Change.InvokeAsync(new UploadChangeEventArgs() { Files = files.Select(f => new FileInfo() { Name = f.Name, Size = f.Size }).ToList() });
+        }
+
+        /// <summary>
+        /// Called on file remove.
+        /// </summary>
+        /// <param name="fileName">The name of the file to remove.</param>
+        /// <param name="ignoreCase">Specify true is file name casing should be ignored (default: false)</param>
+        public async System.Threading.Tasks.Task RemoveFile(string fileName, bool ignoreCase = false)
+        {
+            var comparisonMethod = ignoreCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+            var fileInfo = files.FirstOrDefault(f => string.Equals(f.Name, fileName, comparisonMethod));
+            if (fileInfo != null)
+            {
+                await OnRemove(fileInfo);
+            }
+        }
+
+        /// <summary>
         /// Called on file remove.
         /// </summary>
         /// <param name="file">The file.</param>
-        protected async System.Threading.Tasks.Task OnRemove(PreviewFileInfo file)
+        /// <param name="fireChangeEvent">If the linked <see cref="Change" /> event should be fired as a result of this removal (default: true)</param>
+        protected async System.Threading.Tasks.Task OnRemove(PreviewFileInfo file, bool fireChangeEvent = true)
         {
             files.Remove(file);
             await JSRuntime.InvokeVoidAsync("Radzen.removeFileFromUpload", fileUpload, file.Name);
@@ -263,7 +299,7 @@ namespace Radzen.Blazor
         /// <param name="total">The total.</param>
         /// <param name="files">The files.</param>
         [JSInvokable("RadzenUpload.OnProgress")]
-        public async System.Threading.Tasks.Task OnProgress(int progress, int loaded, int total, IEnumerable<FileInfo> files)
+        public async System.Threading.Tasks.Task OnProgress(int progress, long loaded, long total, IEnumerable<FileInfo> files)
         {
             await Progress.InvokeAsync(new UploadProgressArgs() { Progress = progress, Loaded = loaded, Total = total, Files = files });
         }

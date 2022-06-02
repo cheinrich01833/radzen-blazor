@@ -43,10 +43,7 @@ namespace Radzen.Blazor
 
                 var newValue = new DateTime(CurrentDate.Year, CurrentDate.Month, CurrentDate.Day, newHour, CurrentDate.Minute, CurrentDate.Second);
 
-                if (!object.Equals(newValue, Value))
-                {
-                    await UpdateValueFromTime(newValue);
-                }
+                await UpdateValueFromTime(newValue);
             }
         }
 
@@ -67,10 +64,7 @@ namespace Radzen.Blazor
 
                 var newValue = new DateTime(CurrentDate.Year, CurrentDate.Month, CurrentDate.Day, newHour, CurrentDate.Minute, CurrentDate.Second);
 
-                if (!object.Equals(newValue, Value))
-                {
-                    await UpdateValueFromTime(newValue);
-                }
+                await UpdateValueFromTime(newValue);
             }
         }
 
@@ -215,14 +209,20 @@ namespace Radzen.Blazor
         IList<NameValue> months;
         IList<NameValue> years;
 
+        int YearFrom { get; set; }
+        int YearTo { get; set; }
+
         /// <inheritdoc />
         protected override void OnInitialized()
         {
             base.OnInitialized();
 
+            YearFrom = Min.HasValue ? Min.Value.Year : int.Parse(YearRange.Split(':').First());
+            YearTo = Max.HasValue ? Max.Value.Year : int.Parse(YearRange.Split(':').Last());
             months = Enumerable.Range(1, 12).Select(i => new NameValue() { Name = Culture.DateTimeFormat.GetMonthName(i), Value = i }).ToList();
-            years = Enumerable.Range(int.Parse(YearRange.Split(':').First()), int.Parse(YearRange.Split(':').Last()) - int.Parse(YearRange.Split(':').First()) + 1)
+            years = Enumerable.Range(YearFrom, YearTo - YearFrom + 1)
                 .Select(i => new NameValue() { Name = $"{i}", Value = i }).ToList();
+
         }
 
         /// <summary>
@@ -255,6 +255,27 @@ namespace Radzen.Blazor
         [Parameter]
         public string InputClass { get; set; }
 
+        /// <summary>
+        /// Gets or sets the Minimum Selectable Date.
+        /// </summary>
+        /// <value>The Minimum Selectable Date.</value>
+        [Parameter]
+        public DateTime? Min { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Maximum Selectable Date.
+        /// </summary>
+        /// <value>The Maximum Selectable Date.</value>
+        [Parameter]
+        public DateTime? Max { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Initial Date/Month View.
+        /// </summary>
+        /// <value>The Initial Date/Month View.</value>
+        [Parameter]
+        public DateTime? InitialViewDate { get; set; }
+
         DateTime? _dateTimeValue;
 
         DateTime? DateTimeValue
@@ -282,7 +303,7 @@ namespace Radzen.Blazor
 
         DateRenderEventArgs DateAttributes(DateTime value)
         {
-            var args = new Radzen.DateRenderEventArgs() { Date = value, Disabled = false };
+            var args = new Radzen.DateRenderEventArgs() { Date = value, Disabled = (Min.HasValue && value < Min.Value) || (Max.HasValue && value > Max.Value) };
 
             if (DateRender != null)
             {
@@ -334,12 +355,6 @@ namespace Radzen.Blazor
                         {
                             DateTimeValue = null;
                         }
-
-                        if (DateTimeValue.HasValue && DateTimeValue.Value == default(DateTime))
-                        {
-                            _value = null;
-                            _dateTimeValue = null;
-                        }
                     }
                 }
             }
@@ -353,11 +368,11 @@ namespace Radzen.Blazor
             {
                 if (_currentDate == default(DateTime))
                 {
-                    _currentDate = HasValue && DateTimeValue.Value != default(DateTime) ? DateTimeValue.Value : DateTime.Today;
+                    _currentDate = HasValue ? DateTimeValue.Value : InitialViewDate ?? DateTime.Today;
                 }
                 return _currentDate;
             }
-            set 
+            set
             {
                 _currentDate = value;
                 CurrentDateChanged.InvokeAsync(value);
@@ -374,7 +389,17 @@ namespace Radzen.Blazor
         {
             get
             {
+                if (CurrentDate == DateTime.MinValue)
+                {
+                    return DateTime.MinValue;
+                }
+
                 var firstDayOfTheMonth = new DateTime(CurrentDate.Year, CurrentDate.Month, 1);
+
+                if (firstDayOfTheMonth == DateTime.MinValue)
+                {
+                    return DateTime.MinValue;
+                }
 
                 int diff = (7 + (firstDayOfTheMonth.DayOfWeek - Culture.DateTimeFormat.FirstDayOfWeek)) % 7;
                 return firstDayOfTheMonth.AddDays(-1 * diff).Date;
@@ -488,7 +513,7 @@ namespace Radzen.Blazor
 
             if (valid && !DateAttributes(value).Disabled)
             {
-                newValue = value;
+                newValue = TimeOnly && CurrentDate != null ? new DateTime(CurrentDate.Year, CurrentDate.Month, CurrentDate.Day, value.Hour, value.Minute, value.Second) : value;
             }
             else
             {
@@ -675,7 +700,7 @@ namespace Radzen.Blazor
         /// </summary>
         /// <value>The year range.</value>
         [Parameter]
-        public string YearRange { get; set; } = "1950:2050";
+        public string YearRange { get; set; } = $"1950:{DateTime.Now.AddYears(30).Year}";
 
         /// <summary>
         /// Gets or sets the hour format.
@@ -704,6 +729,13 @@ namespace Radzen.Blazor
         /// <value>The value changed callback.</value>
         [Parameter]
         public EventCallback<TValue> ValueChanged { get; set; }
+
+        /// <summary>
+        /// Gets or sets the footer template.
+        /// </summary>
+        /// <value>The footer template.</value>
+        [Parameter]
+        public RenderFragment FooterTemplate { get; set; }
 
         string contentStyle = "display:none;";
 
@@ -769,7 +801,7 @@ namespace Radzen.Blazor
         {
             if (ShowTimeOkButton)
             {
-                CurrentDate = new DateTime(newValue.Year, newValue.Month,newValue.Day, CurrentDate.Hour, CurrentDate.Minute, CurrentDate.Second);
+                CurrentDate = new DateTime(newValue.Year, newValue.Month, newValue.Day, CurrentDate.Hour, CurrentDate.Minute, CurrentDate.Second);
                 await OkClick();
             }
             else
@@ -805,6 +837,11 @@ namespace Radzen.Blazor
         private string getOpenPopup()
         {
             return !Disabled && !ReadOnly && !Inline ? $"Radzen.togglePopup(this.parentNode, '{PopupID}')" : "";
+        }
+
+        private string getOpenPopupForInput()
+        {
+            return !Disabled && !ReadOnly && !Inline && !AllowInput ? $"Radzen.togglePopup(this.parentNode, '{PopupID}')" : "";
         }
 
         /// <summary>

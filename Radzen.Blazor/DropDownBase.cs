@@ -122,6 +122,19 @@ namespace Radzen
             });
         }
 
+        /// <inheritdoc />
+        public override bool HasValue
+        {
+            get
+            {
+                if (typeof(T) == typeof(string))
+                {
+                    return !string.IsNullOrEmpty($"{internalValue}");
+                }
+                return internalValue != null;
+            }
+        }
+
         /// <summary>
         /// Renders the item.
         /// </summary>
@@ -130,6 +143,23 @@ namespace Radzen
         internal virtual void RenderItem(RenderTreeBuilder builder, object item)
         {
             //
+        }
+
+        System.Collections.Generic.HashSet<object> keys = new System.Collections.Generic.HashSet<object>();
+
+        internal object GetKey(object item)
+        {
+            var value = PropertyAccess.GetItemOrValueFromProperty(item, ValueProperty);
+
+            if (!keys.Contains(value))
+            {
+                keys.Add(value);
+                return value;
+            }
+            else
+            {
+                return item;
+            }
         }
 
         /// <summary>
@@ -177,7 +207,7 @@ namespace Radzen
         /// <summary>
         /// The selected items
         /// </summary>
-        protected List<object> selectedItems = new List<object>();
+        protected IList<object> selectedItems = new List<object>();
         /// <summary>
         /// The selected item
         /// </summary>
@@ -206,17 +236,17 @@ namespace Radzen
             if (!string.IsNullOrEmpty(ValueProperty))
             {
                 System.Reflection.PropertyInfo pi = PropertyAccess.GetElementType(Data.GetType()).GetProperty(ValueProperty);
-                Value = selectedItems.Select(i => PropertyAccess.GetItemOrValueFromProperty(i, ValueProperty)).AsQueryable().Cast(pi.PropertyType);
+                internalValue = selectedItems.Select(i => PropertyAccess.GetItemOrValueFromProperty(i, ValueProperty)).AsQueryable().Cast(pi.PropertyType);
             }
             else
             {
                 var type = typeof(T).IsGenericType ? typeof(T).GetGenericArguments()[0] : typeof(T);
-                Value = selectedItems.AsQueryable().Cast(type);
+                internalValue = selectedItems.AsQueryable().Cast(type);
             }
 
-            await ValueChanged.InvokeAsync((T)Value);
+            await ValueChanged.InvokeAsync((T)internalValue);
             if (FieldIdentifier.FieldName != null) { EditContext?.NotifyFieldChanged(FieldIdentifier); }
-            await Change.InvokeAsync(Value);
+            await Change.InvokeAsync(internalValue);
 
             StateHasChanged();
         }
@@ -241,16 +271,16 @@ namespace Radzen
             searchText = null;
             await JSRuntime.InvokeAsync<string>("Radzen.setInputValue", search, "");
 
-            Value = default(T);
+            internalValue = default(T);
             selectedItem = null;
 
             selectedItems.Clear();
 
             selectedIndex = -1;
 
-            await ValueChanged.InvokeAsync((T)Value);
+            await ValueChanged.InvokeAsync((T)internalValue);
             if (FieldIdentifier.FieldName != null) { EditContext?.NotifyFieldChanged(FieldIdentifier); }
-            await Change.InvokeAsync(Value);
+            await Change.InvokeAsync(internalValue);
 
             await OnFilter(new ChangeEventArgs());
 
@@ -286,8 +316,6 @@ namespace Radzen
                         selectedItems.Clear();
                     }
 
-                    SelectItemFromValue(Value);
-
                     OnDataChanged();
 
                     StateHasChanged();
@@ -303,7 +331,7 @@ namespace Radzen
         {
             get
             {
-                return $"popup{UniqueID}";
+                return $"popup-{GetId()}";
             }
         }
 
@@ -315,7 +343,7 @@ namespace Radzen
         {
             get
             {
-                return $"search{UniqueID}";
+                return $"search-{GetId()}";
             }
         }
 
@@ -361,7 +389,7 @@ namespace Radzen
         /// <summary>
         /// The list
         /// </summary>
-        protected ElementReference list;
+        protected ElementReference? list;
         /// <summary>
         /// The selected index
         /// </summary>
@@ -381,7 +409,10 @@ namespace Radzen
             await JSRuntime.InvokeVoidAsync("Radzen.togglePopup", Element, PopupID, true);
             await JSRuntime.InvokeVoidAsync("Radzen.focusElement", isFilter ? UniqueID : SearchID);
 
-            await JSRuntime.InvokeVoidAsync("Radzen.selectListItem", search, list, selectedIndex);
+            if (list != null)
+            {
+                await JSRuntime.InvokeVoidAsync("Radzen.selectListItem", search, list, selectedIndex);
+            }
         }
 
         /// <summary>
@@ -576,6 +607,14 @@ namespace Radzen
             return base.OnAfterRenderAsync(firstRender);
         }
 
+        /// <inheritdoc />
+        protected override void OnInitialized()
+        {
+            internalValue = Value;
+
+            base.OnInitialized();
+        }
+
         /// <summary>
         /// Set parameters as an asynchronous operation.
         /// </summary>
@@ -604,6 +643,11 @@ namespace Radzen
                 shouldClose = !visible;
             }
 
+            if (parameters.DidParameterChange(nameof(Value), Value))
+            {
+                internalValue = parameters.GetValueOrDefault<object>(nameof(Value));
+            }
+
             await base.SetParametersAsync(parameters);
 
             if (shouldClose && !firstRender)
@@ -618,7 +662,7 @@ namespace Radzen
         /// <returns>Task.</returns>
         protected override Task OnParametersSetAsync()
         {
-            var valueAsEnumerable = Value as IEnumerable;
+            var valueAsEnumerable = internalValue as IEnumerable;
 
             if (valueAsEnumerable != null)
             {
@@ -628,7 +672,7 @@ namespace Radzen
                 }
             }
 
-            SelectItemFromValue(Value);
+            SelectItemFromValue(internalValue);
 
             return base.OnParametersSetAsync();
         }
@@ -639,7 +683,7 @@ namespace Radzen
         /// <param name="args">The <see cref="ChangeEventArgs"/> instance containing the event data.</param>
         protected void OnChange(ChangeEventArgs args)
         {
-            Value = args.Value;
+            internalValue = args.Value;
         }
 
         /// <summary>
@@ -775,12 +819,14 @@ namespace Radzen
             await SelectItem(item, raiseChange);
         }
 
+        internal object internalValue;
+
         /// <summary>
         /// Selects the item.
         /// </summary>
         /// <param name="item">The item.</param>
         /// <param name="raiseChange">if set to <c>true</c> [raise change].</param>
-        protected async System.Threading.Tasks.Task SelectItem(object item, bool raiseChange = true)
+        public async System.Threading.Tasks.Task SelectItem(object item, bool raiseChange = true)
         {
             if (!Multiple)
             {
@@ -790,11 +836,11 @@ namespace Radzen
                 selectedItem = item;
                 if (!string.IsNullOrEmpty(ValueProperty))
                 {
-                    Value = PropertyAccess.GetItemOrValueFromProperty(item, ValueProperty);
+                    internalValue = PropertyAccess.GetItemOrValueFromProperty(item, ValueProperty);
                 }
                 else
                 {
-                    Value = item;
+                    internalValue = item;
                 }
 
                 SetSelectedIndexFromSelectedItem();
@@ -815,7 +861,7 @@ namespace Radzen
                 if (!string.IsNullOrEmpty(ValueProperty))
                 {
                     System.Reflection.PropertyInfo pi = PropertyAccess.GetElementType(Data.GetType()).GetProperty(ValueProperty);
-                    Value = selectedItems.Select(i => PropertyAccess.GetItemOrValueFromProperty(i, ValueProperty)).AsQueryable().Cast(pi.PropertyType);
+                    internalValue = selectedItems.Select(i => PropertyAccess.GetItemOrValueFromProperty(i, ValueProperty)).AsQueryable().Cast(pi.PropertyType);
                 }
                 else
                 {
@@ -823,19 +869,19 @@ namespace Radzen
                     var elementType = firstElement != null ? firstElement.GetType() : null;
                     if (elementType != null)
                     {
-                        Value = selectedItems.AsQueryable().Cast(elementType);
+                        internalValue = selectedItems.AsQueryable().Cast(elementType);
                     }
                     else
                     {
-                        Value = selectedItems;
+                        internalValue = selectedItems;
                     }
                 }
             }
             if (raiseChange)
             {
-                await ValueChanged.InvokeAsync(object.Equals(Value, null) ? default(T) : (T)Value);
+                await ValueChanged.InvokeAsync(object.Equals(internalValue, null) ? default(T) : (T)internalValue);
                 if (FieldIdentifier.FieldName != null) { EditContext?.NotifyFieldChanged(FieldIdentifier); }
-                await Change.InvokeAsync(Value);
+                await Change.InvokeAsync(internalValue);
             }
             StateHasChanged();
         }
@@ -863,7 +909,7 @@ namespace Radzen
                     }
                     else
                     {
-                        selectedItem = Value;
+                        selectedItem = internalValue;
                     }
 
                     SetSelectedIndexFromSelectedItem();
@@ -908,6 +954,14 @@ namespace Radzen
             {
                 selectedItem = null;
             }
+        }
+
+        /// <inheritdoc />
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            keys.Clear();
         }
     }
 }

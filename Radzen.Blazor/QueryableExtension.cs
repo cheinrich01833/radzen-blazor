@@ -168,6 +168,17 @@ namespace Radzen
                             secondValue = sv is DateTime ? ((DateTime)sv).ToString("yyyy-MM-ddTHH:mm:ss.fffZ") : sv is DateTimeOffset ? ((DateTimeOffset)sv).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") : "";
                         }
                     }
+                    else if (PropertyAccess.IsEnum(column.FilterPropertyType) || PropertyAccess.IsNullableEnum(column.FilterPropertyType))
+                    {
+                        if (v != null)
+                        {
+                            value = ((int)v).ToString();
+                        }
+                        if (sv != null)
+                        {
+                            secondValue = ((int)sv).ToString();
+                        }
+                    }
                     else if (typeof(IEnumerable).IsAssignableFrom(column.FilterPropertyType) && column.FilterPropertyType != typeof(string))
                     {
                         var enumerableValue = ((IEnumerable)(v != null ? v : Enumerable.Empty<object>())).AsQueryable();
@@ -395,16 +406,23 @@ namespace Radzen
                 }
                 else if (columnFilterOperator == FilterOperator.IsNull)
                 {
-                    return $@"({property} == null ? """" : {property}) == null";
+                    return $@"np({property}) == null";
                 }
                 else if (columnFilterOperator == FilterOperator.IsNotNull)
                 {
-                    return $@"({property} == null ? """" : {property}) != null";
+                    return $@"np({property}) != null";
                 }
             }
             else if (PropertyAccess.IsNumeric(column.FilterPropertyType))
             {
-                return $"{property} {linqOperator} {value}";
+                if (column.GetFilterOperator() == FilterOperator.IsNull || column.GetFilterOperator() == FilterOperator.IsNotNull)
+                {
+                    return $"{property} {linqOperator} null";
+                }
+                else
+                {
+                    return $"{property} {linqOperator} {value}";
+                }
             }
             else if (column.FilterPropertyType == typeof(DateTime) || 
                     column.FilterPropertyType == typeof(DateTime?) ||
@@ -870,7 +888,7 @@ namespace Radzen
                         property = $"({property})";
                     }
 
-                    if (column.FilterPropertyType == typeof(string))
+                    if (column.FilterPropertyType == typeof(string) && !(column.GetFilterOperator() == FilterOperator.IsNotNull || column.GetFilterOperator() == FilterOperator.IsNull))
                     {
                         property = $@"({property} == null ? """" : {property})";
                     }

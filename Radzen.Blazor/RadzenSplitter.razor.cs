@@ -174,7 +174,7 @@ namespace Radzen.Blazor
                         return;
                 }
 
-                paneNext.Collapsed = false;
+                paneNext.SetCollapsed(false);
             }
             else
             {
@@ -186,7 +186,7 @@ namespace Radzen.Blazor
                         return;
                 }
 
-                pane.Collapsed = true;
+                pane.SetCollapsed(true);
             }
 
             await InvokeAsync(StateHasChanged);
@@ -207,7 +207,7 @@ namespace Radzen.Blazor
                         return;
                 }
 
-                paneNext.Collapsed = true;
+                paneNext.SetCollapsed(true);
             }
             else
             {
@@ -219,7 +219,7 @@ namespace Radzen.Blazor
                         return;
                 }
 
-                pane.Collapsed = false;
+                pane.SetCollapsed(false);
             }
 
             await InvokeAsync(StateHasChanged);
@@ -229,7 +229,7 @@ namespace Radzen.Blazor
         /// <inheritdoc />
         protected override string GetComponentCssClass()
         {
-            return $"rz-splitter rz-splitter-{Enum.GetName(typeof(Orientation), Orientation).ToLower()}";
+            return $"rz-splitter rz-splitter-{Enum.GetName(typeof(Orientation), Orientation).ToLowerInvariant()}";
         }
 
         /// <summary>

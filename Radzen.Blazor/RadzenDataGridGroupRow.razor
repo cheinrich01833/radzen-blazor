@@ -20,7 +20,7 @@
             <span class="@(Grid.ExpandedGroupItemStyle(this, rowArgs.Item1.Expanded))"></span>
         </a>
     </td>
-    <td colspan="@(Columns.Count + Grid.groups.Count - 1 - Group.Level)">
+    <td colspan="@(Columns.Count + Grid.Groups.Count - 1 - Group.Level)">
         <span class="rz-cell-data">
             @if (Grid.GroupHeaderTemplate != null)
             {
@@ -41,7 +41,19 @@
     }
     else if(Grid.GroupFootersAlwaysVisible)
     {
+        if (!Grid.collapsedGroupItems.Keys.Contains(this))
+        {
+            Grid.collapsedGroupItems.Add(this, true);
+        }
+
         @DrawDataRows(true)
+    }
+    else
+    {
+        if (!Grid.collapsedGroupItems.Keys.Contains(this))
+        {
+            Grid.collapsedGroupItems.Add(this, true);
+        }
     }
 }
 @code {
@@ -66,7 +78,7 @@
                     Group = new Group()
                     {
                         Level = level,
-                        GroupDescriptor = Grid.groups?.ElementAtOrDefault(level),
+                        GroupDescriptor = Grid.Groups?.ElementAtOrDefault(level),
                         Data = _groupResult
                     };
                 }

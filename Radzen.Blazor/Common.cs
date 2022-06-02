@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Web;
 using Radzen.Blazor;
 using System;
 using System.Collections;
@@ -100,7 +101,7 @@ namespace Radzen
     /// <summary>
     /// Supplies information about a <see cref="RadzenMenu.Click" /> event that is being raised.
     /// </summary>
-    public class MenuItemEventArgs
+    public class MenuItemEventArgs : MouseEventArgs
     {
         /// <summary>
         /// Gets text of the clicked item.
@@ -284,11 +285,11 @@ namespace Radzen
         /// <summary>
         /// Gets or sets the number of bytes that have been uploaded.
         /// </summary>
-        public int Loaded { get; set; }
+        public long Loaded { get; set; }
         /// <summary>
         /// Gets the total number of bytes that need to be uploaded.
         /// </summary>
-        public int Total { get; set; }
+        public long Total { get; set; }
         /// <summary>
         /// Gets the progress as a percentage value (from <c>0</c> to <c>100</c>).
         /// </summary>
@@ -324,10 +325,11 @@ namespace Radzen
         /// Gets the name of the selected file.
         /// </summary>
         public string Name { get; set; }
+
         /// <summary>
         /// Gets the size (in bytes) of the selected file.
         /// </summary>
-        public int Size { get; set; }
+        public long Size { get; set; }
     }
 
     /// <summary>
@@ -670,9 +672,13 @@ namespace Radzen
     public enum FilterMode
     {
         /// <summary>
-        /// The components displays inline filtering UI and filters as you type.
+        /// The component displays inline filtering UI and filters as you type.
         /// </summary>
         Simple,
+        /// <summary>
+        /// The component displays inline filtering UI and filters as you type combined with filter operator menu.
+        /// </summary>
+        SimpleWithMenu,
         /// <summary>
         /// The component displays a popup filtering UI and allows you to pick filtering operator and or filter by multiple values.
         /// </summary>
@@ -896,6 +902,77 @@ namespace Radzen
     }
 
     /// <summary>
+    /// Supplies information about a <see cref="RadzenDataGrid{TItem}.Sort" /> event that is being raised.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class DataGridColumnSortEventArgs<T>
+    {
+        /// <summary>
+        /// Gets the sorted RadzenDataGridColumn.
+        /// </summary>
+        public RadzenDataGridColumn<T> Column { get; internal set; }
+
+        /// <summary>
+        /// Gets the new sort order of the sorted column.
+        /// </summary>
+        public SortOrder? SortOrder { get; internal set; }
+    }
+
+    /// <summary>
+    /// Supplies information about a <see cref="RadzenDataGrid{TItem}.Group" /> event that is being raised.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class DataGridColumnGroupEventArgs<T>
+    {
+        /// <summary>
+        /// Gets the sorted RadzenDataGridColumn.
+        /// </summary>
+        public RadzenDataGridColumn<T> Column { get; internal set; }
+
+        /// <summary>
+        /// Gets the new sort order of the sorted column.
+        /// </summary>
+        public GroupDescriptor GroupDescriptor { get; internal set; }
+    }
+
+    /// <summary>
+    /// Supplies information about a <see cref="RadzenDataGrid{TItem}.Filter" /> event that is being raised.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class DataGridColumnFilterEventArgs<T>
+    {
+        /// <summary>
+        /// Gets the filtered RadzenDataGridColumn.
+        /// </summary>
+        public RadzenDataGridColumn<T> Column { get; internal set; }
+
+        /// <summary>
+        /// Gets the new filter value of the filtered column.
+        /// </summary>
+        public object FilterValue { get; internal set; }
+
+        /// <summary>
+        /// Gets the new second filter value of the filtered column.
+        /// </summary>
+        public object SecondFilterValue { get; internal set; }
+
+        /// <summary>
+        /// Gets the new filter operator of the filtered column.
+        /// </summary>
+        public FilterOperator FilterOperator { get; internal set; }
+
+        /// <summary>
+        /// Gets the new second filter operator of the filtered column.
+        /// </summary>
+        public FilterOperator SecondFilterOperator { get; internal set; }
+
+        /// <summary>
+        /// Gets the new logical filter operator of the filtered column.
+        /// </summary>
+        public LogicalFilterOperator LogicalFilterOperator { get; internal set; }
+    }
+
+    /// <summary>
     /// Supplies information about a <see cref="RadzenDataGrid{TItem}.ColumnResized" /> event that is being raised.
     /// </summary>
     /// <typeparam name="T"></typeparam>
@@ -905,8 +982,9 @@ namespace Radzen
         /// Gets the resized RadzenDataGridColumn.
         /// </summary>
         public RadzenDataGridColumn<T> Column { get; internal set; }
+
         /// <summary>
-        /// Gets new the width of the resized column.
+        /// Gets the new width of the resized column.
         /// </summary>
         public double Width { get; internal set; }
     }
@@ -1402,6 +1480,11 @@ namespace Radzen
                 return Guid.Parse((string)value);
             }
 
+            if (Nullable.GetUnderlyingType(type)?.IsEnum == true)
+            {
+                return Enum.Parse(Nullable.GetUnderlyingType(type), value.ToString());
+            }
+            
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
             {
                 Type itemType = type.GetGenericArguments()[0];
@@ -1621,6 +1704,31 @@ namespace Radzen
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// Determines whether the specified type is an enum.
+        /// </summary>
+        /// <param name="source">The type.</param>
+        /// <returns><c>true</c> if the specified source is an enum; otherwise, <c>false</c>.</returns>
+        public static bool IsEnum(Type source)
+        {
+            if (source == null)
+                return false;
+
+            return source.IsEnum;
+        }
+
+        /// <summary> 
+        /// Determines whether the specified type is a Nullable enum. 
+        /// </summary> 
+        /// <param name="source">The type.</param> 
+        /// <returns><c>true</c> if the specified source is an enum; otherwise, <c>false</c>.</returns> 
+        public static bool IsNullableEnum(Type source)
+        {
+            if (source == null) return false;
+            Type u = Nullable.GetUnderlyingType(source);
+            return (u != null) && u.IsEnum;
         }
 
         /// <summary>
